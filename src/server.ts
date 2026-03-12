@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 
 import { loadModel } from "./model";
 import healthRouter from "./routes/health";
@@ -12,6 +13,57 @@ const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
+
+// ─── Rate Limiters ────────────────────────────────────────────────────────────
+
+/** Global limiter – applies to every route */
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30, // 30 req / min per IP
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later." },
+  handler: (req, res, _next, options) => {
+    console.warn(
+      `[rate-limit] global – blocked ${req.ip} on ${req.method} ${req.url}`,
+    );
+    res.status(options.statusCode).json(options.message);
+  },
+});
+
+/** Stricter limiter for compute-heavy endpoints */
+const heavyLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // 10 req / min per IP
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: {
+    error: "Rate limit exceeded for this endpoint. Please slow down.",
+  },
+  handler: (req, res, _next, options) => {
+    console.warn(
+      `[rate-limit] heavy – blocked ${req.ip} on ${req.method} ${req.url}`,
+    );
+    res.status(options.statusCode).json(options.message);
+  },
+});
+
+/** Write limiter for store mutations */
+const writeLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30, // 30 writes / min per IP
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Write rate limit exceeded. Please slow down." },
+  handler: (req, res, _next, options) => {
+    console.warn(
+      `[rate-limit] write – blocked ${req.ip} on ${req.method} ${req.url}`,
+    );
+    res.status(options.statusCode).json(options.message);
+  },
+});
+
+app.use(globalLimiter);
 
 // ─── Request Logger ───────────────────────────────────────────────────────────
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -39,9 +91,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 console.debug("[server] Registering routes...");
 app.use("/", healthRouter);
 app.use("/health", healthRouter);
-app.use("/embed", embedRouter);
-app.use("/store", storeRouter);
-app.use("/match", matchRouter);
+app.use("/embed", heavyLimiter, embedRouter); // CPU/GPU intensive
+app.use("/store", writeLimiter, storeRouter); // write operations
+app.use("/match", heavyLimiter, matchRouter); // vector search intensive
 console.debug("[server] Routes registered: /health, /embed, /store, /match");
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────

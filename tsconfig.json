@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "NodeNext",      
+    "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "outDir": "./dist",
     "rootDir": "./src",
@@ -9,12 +9,8 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "types": ["node"],           
-    "paths": {
-      "@workspace/backend/*": ["../../packages/backend/convex/*"],
-      "@/*": ["./src/*"]
-    }
+    "types": ["node"]
   },
-  "include": ["src/**/*"],      
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
 }
